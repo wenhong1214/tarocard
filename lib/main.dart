@@ -5,12 +5,7 @@ import 'dart:convert';
 import 'package:http/http.dart' as http;
 
 Future<void> main() async {
-  // 确保在加载前 Flutter 框架已经准备好
   WidgetsFlutterBinding.ensureInitialized();
-  
-  // 加载包含 API Key 的 .env 文件
-
-  
   runApp(const TarotApp());
 }
 
@@ -20,12 +15,17 @@ class TarotApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '78张塔罗全牌阵',
+      title: '塔罗灵境 Tarot',
       theme: ThemeData(
         brightness: Brightness.dark,
-        primaryColor: Colors.deepPurple,
-        scaffoldBackgroundColor: const Color(0xFF121212),
-        appBarTheme: const AppBarTheme(backgroundColor: Color(0xFF1E1E1E)),
+        primaryColor: const Color(0xFF673AB7),
+        scaffoldBackgroundColor: const Color(0xFF0F0C1B),
+        fontFamily: 'serif', // 全局使用衬线字体增加神秘感
+        appBarTheme: const AppBarTheme(
+          backgroundColor: Colors.transparent,
+          elevation: 0,
+          centerTitle: true,
+        ),
       ),
       home: const HomeScreen(),
       debugShowCheckedModeBanner: false,
@@ -33,7 +33,46 @@ class TarotApp extends StatelessWidget {
   }
 }
 
-// ================= 数据模型 =================
+// ================= 数据模型与四大经典牌阵配置 =================
+
+class SpreadConfig {
+  final String name;
+  final List<String> positions;
+  final String description;
+
+  SpreadConfig({required this.name, required this.positions, required this.description});
+}
+
+// 🔮 四大经典专业法阵
+final List<SpreadConfig> availableSpreads = [
+  SpreadConfig(
+    name: '圣三角牌阵 (3张)',
+    description: '最经典的入门牌阵，呈倒三角排列。适合每日运势或快速提问。',
+    positions: ['过去的影响', '现在的状况', '未来的发展'],
+  ),
+  SpreadConfig(
+    name: '大十字展开法 (5张)',
+    description: '呈完美的十字形状，剖析特定事件的核心、阻力、助力及深层原因。',
+    positions: ['核心现状', '过去影响 / 阻力', '未来发展 / 助力', '显意识 / 理想目标', '潜意识 / 现实基础'],
+  ),
+  SpreadConfig(
+    name: '二择一展开法 (5张)',
+    description: '呈 Y 字形分支，面临抉择时专门针对“做决定”设计的牌阵。',
+    positions: ['面临的核心问题', '选择 A 的发展现状', '选择 B 的发展现状', '选择 A 的最终结果', '选择 B 的最终结果'],
+  ),
+  SpreadConfig(
+    name: '凯尔特十字 (10张)',
+    description: '最经典的塔罗牌阵，包含中央十字与右侧立柱。全方位深度剖析复杂问题。',
+    positions: [
+      '当前现状', '面临的障碍(横放)', '潜意识 / 现实基础', '过去的影响',
+      '显意识 / 理想目标', '不久的未来', 
+      '当事人状态', '环境/他人影响', '希望与恐惧', '最终结果' 
+    ],
+  ),
+];
+
+final List<String> availableTopics = ['综合运势', '爱情与感情', '事业与工作', '金钱与财富', '身心健康'];
+
 class TarotCard {
   final String name;
   final String number;
@@ -44,85 +83,271 @@ class TarotCard {
   final String reversedMeaning;
 
   TarotCard({
-    required this.name,
-    required this.number,
-    required this.arcana,
-    this.suit,
-    required this.img,
-    required this.uprightMeaning,
-    required this.reversedMeaning,
+    required this.name, required this.number, required this.arcana, this.suit,
+    required this.img, required this.uprightMeaning, required this.reversedMeaning,
   });
 }
 
 class DrawnCard {
   final TarotCard card;
   final bool isReversed;
-  final String positionMeaning; // 过去、现在、未来
+  final String positionMeaning;
 
   DrawnCard({required this.card, required this.isReversed, required this.positionMeaning});
 }
 
-// ================= 整合你的 78 张牌 JSON 数据 =================
-// 自动将 JSON 转换为 Flutter 对象，并生成基础牌意模板
-// ================= 整合你的 78 张牌 JSON 数据 =================
 final List<TarotCard> tarotDeck = rawTarotData.map((data) {
   return TarotCard(
-    name: data['name'],
-    number: data['number'],
-    arcana: data['arcana'],
-    suit: data['suit'],
-    img: data['img'],
-    // 直接读取我们写好的正逆位解析！
+    name: data['name'], number: data['number'], arcana: data['arcana'],
+    suit: data['suit'], img: data['img'],
     uprightMeaning: data['upright'] ?? "解析加载中...",
     reversedMeaning: data['reversed'] ?? "解析加载中...",
   );
 }).toList();
 
 
-// ================= 1. 首页 (选择模式) =================
-class HomeScreen extends StatelessWidget {
+// ================= 1. 首页 (高颜值 UI 优化) =================
+class HomeScreen extends StatefulWidget {
   const HomeScreen({Key? key}) : super(key: key);
+
+  @override
+  _HomeScreenState createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  String selectedTopic = availableTopics[0];
+  SpreadConfig selectedSpread = availableSpreads[0];
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('塔罗占卜 (78牌完整版)', style: TextStyle(fontFamily: 'serif'))),
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.auto_awesome, size: 80, color: Colors.amber),
-            const SizedBox(height: 20),
-            const Text('请选择占卜方式', style: TextStyle(fontSize: 24)),
-            const SizedBox(height: 40),
-            ElevatedButton.icon(
-              icon: const Icon(Icons.touch_app),
-              label: const Text('线上虚拟抽牌 (3D翻牌)'),
-              style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.deepPurple,
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                  textStyle: const TextStyle(fontSize: 18)),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const VirtualDrawScreen())),
+      extendBodyBehindAppBar: true,
+      appBar: AppBar(
+        title: const Text('塔 罗 灵 境', style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, letterSpacing: 4, color: Colors.amber)),
+      ),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Color(0xFF1E112A), Color(0xFF0F0C1B), Color(0xFF000000)],
+          ),
+        ),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                const Center(child: Icon(Icons.auto_awesome, size: 50, color: Colors.amber)),
+                const SizedBox(height: 10),
+                const Text('开启你的占卜结界', textAlign: TextAlign.center, style: TextStyle(fontSize: 18, color: Colors.white70)),
+                const SizedBox(height: 40),
+                
+                Row(
+                  children: const [
+                    Icon(Icons.category, color: Colors.amber, size: 20),
+                    SizedBox(width: 8),
+                    Text('你想占卜什么？', style: TextStyle(fontSize: 18, color: Colors.amber, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                Wrap(
+                  spacing: 12,
+                  runSpacing: 12,
+                  children: availableTopics.map((topic) {
+                    final isSelected = selectedTopic == topic;
+                    return GestureDetector(
+                      onTap: () => setState(() => selectedTopic = topic),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 300),
+                        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 10),
+                        decoration: BoxDecoration(
+                          color: isSelected ? const Color(0xFF512DA8).withOpacity(0.8) : Colors.white.withOpacity(0.05),
+                          borderRadius: BorderRadius.circular(25),
+                          border: Border.all(color: isSelected ? Colors.amber : Colors.transparent, width: 1.5),
+                          boxShadow: isSelected ? [BoxShadow(color: Colors.amber.withOpacity(0.3), blurRadius: 8, spreadRadius: 1)] : [],
+                        ),
+                        child: Text(topic, style: TextStyle(color: isSelected ? Colors.white : Colors.white54, fontSize: 15, fontWeight: isSelected ? FontWeight.bold : FontWeight.normal)),
+                      ),
+                    );
+                  }).toList(),
+                ),
+                const SizedBox(height: 40),
+
+                Row(
+                  children: const [
+                    Icon(Icons.dashboard_customize, color: Colors.amber, size: 20),
+                    SizedBox(width: 8),
+                    Text('请选择灵力法阵', style: TextStyle(fontSize: 18, color: Colors.amber, fontWeight: FontWeight.bold)),
+                  ],
+                ),
+                const SizedBox(height: 15),
+                ...availableSpreads.map((spread) {
+                  final isSelected = selectedSpread == spread;
+                  return GestureDetector(
+                    onTap: () => setState(() => selectedSpread = spread),
+                    child: AnimatedContainer(
+                      duration: const Duration(milliseconds: 300),
+                      margin: const EdgeInsets.only(bottom: 15),
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: isSelected ? const Color(0xFF311B92).withOpacity(0.4) : Colors.white.withOpacity(0.03),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: isSelected ? Colors.amber : Colors.white12, width: isSelected ? 1.5 : 1),
+                        boxShadow: isSelected ? [BoxShadow(color: Colors.deepPurple.withOpacity(0.5), blurRadius: 10, spreadRadius: 1)] : [],
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              Text(spread.name, style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: isSelected ? Colors.amber : Colors.white)),
+                              if (isSelected) const Icon(Icons.check_circle, color: Colors.amber, size: 20)
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(spread.description, style: TextStyle(fontSize: 13, height: 1.5, color: isSelected ? Colors.white : Colors.white54)),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+
+                const SizedBox(height: 40),
+
+                _buildActionButton(
+                  icon: Icons.touch_app,
+                  label: '线上虚拟抽牌 (3D翻牌)',
+                  colors: [const Color(0xFF673AB7), const Color(0xFF311B92)],
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => VirtualDrawScreen(topic: selectedTopic, spread: selectedSpread))),
+                ),
+                const SizedBox(height: 15),
+                _buildActionButton(
+                  icon: Icons.view_module,
+                  label: '现实自主选牌 (手动录入)',
+                  colors: [const Color(0xFF424242), const Color(0xFF212121)],
+                  onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => ManualDrawScreen(topic: selectedTopic, spread: selectedSpread))),
+                ),
+                const SizedBox(height: 40),
+              ],
             ),
-            const SizedBox(height: 20),
-            OutlinedButton.icon(
-              icon: const Icon(Icons.view_module),
-              label: const Text('现实自主选牌 (手动录入)'),
-              style: OutlinedButton.styleFrom(
-                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 15),
-                  textStyle: const TextStyle(fontSize: 18)),
-              onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const ManualDrawScreen())),
-            ),
-          ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildActionButton({required IconData icon, required String label, required List<Color> colors, required VoidCallback onTap}) {
+    return Container(
+      height: 55,
+      decoration: BoxDecoration(
+        gradient: LinearGradient(colors: colors),
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: [BoxShadow(color: colors[0].withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))],
+      ),
+      child: Material(
+        color: Colors.transparent,
+        child: InkWell(
+          borderRadius: BorderRadius.circular(12),
+          onTap: onTap,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(icon, color: Colors.white, size: 22),
+              const SizedBox(width: 10),
+              Text(label, style: const TextStyle(fontSize: 17, color: Colors.white, fontWeight: FontWeight.bold, letterSpacing: 1)),
+            ],
+          ),
         ),
       ),
     );
   }
 }
 
-// ================= 2. 线上虚拟抽牌 (3D翻牌特效) =================
+// ================= 全局核心：真实牌阵图形排版引擎 (Spread Visualizer) =================
+// 自动根据法阵类型，将牌摆放到真实的法阵坐标上
+class SpreadVisualizer extends StatelessWidget {
+  final String spreadName;
+  final List<Widget> cards;
+
+  const SpreadVisualizer({Key? key, required this.spreadName, required this.cards}) : super(key: key);
+
+  @override
+  Widget build(BuildContext context) {
+    double canvasWidth = 320;
+    double canvasHeight = 200;
+    List<Widget> positions = [];
+
+    if (spreadName.contains('圣三角')) {
+      canvasWidth = 280; canvasHeight = 460;
+      positions = [
+        Positioned(left: 0, top: 0, child: _safeCard(0)),     
+        Positioned(left: 170, top: 0, child: _safeCard(1)),   
+        Positioned(left: 85, top: 230, child: _safeCard(2)),  
+      ];
+    } else if (spreadName.contains('大十字')) {
+      canvasWidth = 340; canvasHeight = 670;
+      positions = [
+        Positioned(left: 120, top: 225, child: _safeCard(0)), 
+        Positioned(left: 5, top: 225, child: _safeCard(1)),   
+        Positioned(left: 235, top: 225, child: _safeCard(2)), 
+        Positioned(left: 120, top: 0, child: _safeCard(3)),   
+        Positioned(left: 120, top: 450, child: _safeCard(4)), 
+      ];
+    } else if (spreadName.contains('二择一')) {
+      canvasWidth = 340; canvasHeight = 600;
+      positions = [
+        Positioned(left: 120, top: 400, child: _safeCard(0)), 
+        Positioned(left: 40, top: 200, child: _safeCard(1)),  
+        Positioned(left: 200, top: 200, child: _safeCard(2)), 
+        Positioned(left: 0, top: 0, child: _safeCard(3)),     
+        Positioned(left: 240, top: 0, child: _safeCard(4)),   
+      ];
+    } else if (spreadName.contains('凯尔特')) {
+      canvasWidth = 480; canvasHeight = 1000; 
+      positions = [
+        Positioned(left: 120, top: 320, child: _safeCard(0)), 
+        Positioned(left: 120, top: 360, child: _safeCard(1)), 
+        Positioned(left: 120, top: 600, child: _safeCard(2)), 
+        Positioned(left: 10,  top: 320, child: _safeCard(3)), 
+        Positioned(left: 120, top: 40,  child: _safeCard(4)), 
+        Positioned(left: 230, top: 320, child: _safeCard(5)), 
+        Positioned(left: 370, top: 760, child: _safeCard(6)), 
+        Positioned(left: 370, top: 520, child: _safeCard(7)), 
+        Positioned(left: 370, top: 280, child: _safeCard(8)), 
+        Positioned(left: 370, top: 40,  child: _safeCard(9)), 
+      ];
+    } else {
+      return Wrap(spacing: 10, runSpacing: 10, children: cards); 
+    }
+
+    return FittedBox(
+      fit: BoxFit.contain,
+      child: SizedBox(
+        width: canvasWidth,
+        height: canvasHeight,
+        child: Stack(
+          clipBehavior: Clip.none,
+          children: positions,
+        ),
+      ),
+    );
+  }
+
+  Widget _safeCard(int index) {
+    if (index < cards.length) return cards[index];
+    return const SizedBox();
+  }
+}
+
+// ================= 2. 线上虚拟抽牌 (带图形化法阵) =================
 class VirtualDrawScreen extends StatefulWidget {
-  const VirtualDrawScreen({Key? key}) : super(key: key);
+  final String topic;
+  final SpreadConfig spread;
+
+  const VirtualDrawScreen({Key? key, required this.topic, required this.spread}) : super(key: key);
 
   @override
   _VirtualDrawScreenState createState() => _VirtualDrawScreenState();
@@ -135,14 +360,12 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
   @override
   void initState() {
     super.initState();
-    // 从 78 张牌中随机洗牌挑 3 张
     final deck = List<TarotCard>.from(tarotDeck)..shuffle();
-    final positions = ['过去', '现在', '未来'];
-    for (int i = 0; i < 3; i++) {
+    for (int i = 0; i < widget.spread.positions.length; i++) {
       drawnCards.add(DrawnCard(
         card: deck[i],
-        isReversed: Random().nextBool(), // 随机正逆位
-        positionMeaning: positions[i],
+        isReversed: Random().nextBool(),
+        positionMeaning: widget.spread.positions[i],
       ));
     }
   }
@@ -155,43 +378,79 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
 
   @override
   Widget build(BuildContext context) {
+    List<Widget> cardWidgets = List.generate(drawnCards.length, (index) {
+      bool isCrossed = (widget.spread.name.contains('凯尔特') && index == 1);
+      
+      return SizedBox(
+        width: 95, height: 215,
+        child: Column(
+          children: [
+            Container(
+              height: 35,
+              alignment: Alignment.center,
+              child: Text(drawnCards[index].positionMeaning, 
+                style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold),
+                textAlign: TextAlign.center, maxLines: 2,
+              ),
+            ),
+            Expanded(
+              child: TarotCardWidget(
+                drawnCard: drawnCards[index],
+                onFlipped: onCardFlipped,
+                isCrossed: isCrossed,
+              ),
+            ),
+          ],
+        ),
+      );
+    });
+
     return Scaffold(
-      appBar: AppBar(title: const Text('三牌阵：过去 / 现在 / 未来')),
-      body: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          const Text('冥想你的问题，然后依次翻开卡牌', style: TextStyle(fontSize: 16)),
-          const SizedBox(height: 40),
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(3, (index) {
-              return Expanded(
-                child: Padding(
-                  padding: const EdgeInsets.all(8.0),
-                  child: Column(
-                    children: [
-                      Text(drawnCards[index].positionMeaning, style: const TextStyle(color: Colors.amber)),
-                      const SizedBox(height: 10),
-                      TarotCardWidget(
-                        drawnCard: drawnCards[index],
-                        onFlipped: onCardFlipped,
-                      ),
-                    ],
+      appBar: AppBar(title: Text('${widget.spread.name}', style: const TextStyle(fontSize: 18))),
+      body: Container(
+        width: double.infinity,
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1E112A), Color(0xFF0F0C1B)]),
+        ),
+        child: Column(
+          children: [
+            Padding(
+              padding: const EdgeInsets.all(15.0),
+              child: Text('冥想关于【${widget.topic}】的问题，依次翻开下方阵法中的卡牌', style: const TextStyle(fontSize: 15, color: Colors.amberAccent)),
+            ),
+            
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 10),
+                child: Center(
+                  child: SpreadVisualizer(
+                    spreadName: widget.spread.name,
+                    cards: cardWidgets,
                   ),
                 ),
-              );
-            }),
-          ),
-          const SizedBox(height: 40),
-          if (flippedCount == 3)
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
-              onPressed: () {
-                Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: drawnCards)));
-              },
-              child: const Text('查看详细牌意解析', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-            )
-        ],
+              ),
+            ),
+            
+            if (flippedCount == widget.spread.positions.length)
+              Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(20),
+                child: ElevatedButton(
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: Colors.amber, 
+                    foregroundColor: Colors.black, 
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                    elevation: 8,
+                  ),
+                  onPressed: () {
+                    Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: drawnCards, topic: widget.topic, spreadName: widget.spread.name)));
+                  },
+                  child: const Text('✨ 揭晓天机：查看详细牌意解析', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                ),
+              )
+          ],
+        ),
       ),
     );
   }
@@ -200,8 +459,9 @@ class _VirtualDrawScreenState extends State<VirtualDrawScreen> {
 class TarotCardWidget extends StatefulWidget {
   final DrawnCard drawnCard;
   final VoidCallback onFlipped;
+  final bool isCrossed; 
 
-  const TarotCardWidget({Key? key, required this.drawnCard, required this.onFlipped}) : super(key: key);
+  const TarotCardWidget({Key? key, required this.drawnCard, required this.onFlipped, this.isCrossed = false}) : super(key: key);
 
   @override
   _TarotCardWidgetState createState() => _TarotCardWidgetState();
@@ -229,51 +489,55 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with SingleTickerProv
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
-      onTap: _flipCard,
-      child: AnimatedBuilder(
-        animation: _animation,
-        builder: (context, child) {
-          final angle = _animation.value * pi;
-          final transform = Matrix4.identity()
-            ..setEntry(3, 2, 0.001) 
-            ..rotateY(angle);
-          final isUnderBack = angle > pi / 2;
+    return AnimatedBuilder(
+      animation: _animation,
+      builder: (context, child) {
+        final angle = _animation.value * pi;
+        final transform = Matrix4.identity()
+          ..setEntry(3, 2, 0.001) 
+          ..rotateY(angle);
+        final isUnderBack = angle > pi / 2;
 
-          return Transform(
-            transform: transform,
-            alignment: Alignment.center,
-            child: isUnderBack
-                ? Transform(
-                    transform: Matrix4.identity()
-                      ..rotateY(pi)
-                      ..rotateZ(widget.drawnCard.isReversed ? pi : 0),
-                    alignment: Alignment.center,
-                    child: Container(
-                      decoration: BoxDecoration(border: Border.all(color: Colors.amber, width: 2)),
-                      // 【关键修改】这里改成了加载本地 assets/images/ 里的图片！
-                      child: Image.asset('assets/images/${widget.drawnCard.card.img}', height: 160, fit: BoxFit.cover,
-                        // 如果你还没放图，这里会友好提示避免崩溃
-                        errorBuilder: (context, error, stackTrace) => Container(
-                          height: 160, color: Colors.grey[800],
-                          child: const Center(child: Text('缺图', style: TextStyle(color: Colors.white))),
-                        ),
+        Widget cardUI = Transform(
+          transform: transform,
+          alignment: Alignment.center,
+          child: isUnderBack
+              ? Transform(
+                  transform: Matrix4.identity()
+                    ..rotateY(pi)
+                    ..rotateZ(widget.drawnCard.isReversed ? pi : 0),
+                  alignment: Alignment.center,
+                  child: Container(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(color: Colors.amber, width: 2),
+                      boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.4), blurRadius: 10)]
+                    ),
+                    child: ClipRRect(
+                      borderRadius: BorderRadius.circular(4),
+                      child: Image.asset('assets/images/${widget.drawnCard.card.img}', fit: BoxFit.cover,
+                        errorBuilder: (context, error, stackTrace) => Container(color: Colors.grey[800]),
                       ),
                     ),
-                  )
-                : Container(
-                    height: 160,
-                    width: 95,
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(colors: [Colors.indigo, Colors.deepPurple]),
-                      border: Border.all(color: Colors.white70, width: 2),
-                      borderRadius: BorderRadius.circular(4),
-                    ),
-                    child: const Center(child: Icon(Icons.star, color: Colors.white54, size: 40)),
                   ),
-          );
-        },
-      ),
+                )
+              : Container(
+                  decoration: BoxDecoration(
+                    gradient: const LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [Color(0xFF311B92), Color(0xFF1A237E)]),
+                    border: Border.all(color: Colors.white54, width: 1.5),
+                    borderRadius: BorderRadius.circular(6),
+                    boxShadow: const [BoxShadow(color: Colors.black54, blurRadius: 5, offset: Offset(2, 4))]
+                  ),
+                  child: const Center(child: Icon(Icons.star, color: Colors.amberAccent, size: 35)),
+                ),
+        );
+
+        if (widget.isCrossed) {
+          cardUI = Transform.rotate(angle: pi / 2, child: cardUI);
+        }
+
+        return GestureDetector(onTap: _flipCard, child: cardUI);
+      },
     );
   }
 
@@ -284,9 +548,12 @@ class _TarotCardWidgetState extends State<TarotCardWidget> with SingleTickerProv
   }
 }
 
-// ================= 3. 现实手动录入模式 =================
+// ================= 3. 现实手动录入模式 (史诗级强化：带法阵视图与防重复) =================
 class ManualDrawScreen extends StatefulWidget {
-  const ManualDrawScreen({Key? key}) : super(key: key);
+  final String topic;
+  final SpreadConfig spread;
+
+  const ManualDrawScreen({Key? key, required this.topic, required this.spread}) : super(key: key);
 
   @override
   _ManualDrawScreenState createState() => _ManualDrawScreenState();
@@ -294,31 +561,33 @@ class ManualDrawScreen extends StatefulWidget {
 
 class _ManualDrawScreenState extends State<ManualDrawScreen> {
   List<DrawnCard> selectedCards = [];
-  final positions = ['过去', '现在', '未来'];
 
   void _selectCard(TarotCard card) {
-    if (selectedCards.length >= 3) return;
+    if (selectedCards.length >= widget.spread.positions.length) return;
+    
     showDialog(
       context: context,
       builder: (context) {
         return AlertDialog(
-          title: Text('【${card.name}】的状态是？'),
+          backgroundColor: const Color(0xFF1E1E1E),
+          title: Text('【${card.name}】的状态是？', style: const TextStyle(color: Colors.amber)),
+          content: const Text('请回忆你在现实中抽到这张牌时的正逆位状态。', style: TextStyle(color: Colors.white70)),
           actions: [
             TextButton(
               onPressed: () {
-                setState(() => selectedCards.add(DrawnCard(card: card, isReversed: false, positionMeaning: positions[selectedCards.length])));
+                setState(() => selectedCards.add(DrawnCard(card: card, isReversed: false, positionMeaning: widget.spread.positions[selectedCards.length])));
                 Navigator.pop(context);
                 _checkFinish();
               },
-              child: const Text('正位 (Upright)'),
+              child: const Text('正位 (Upright)', style: TextStyle(color: Colors.white, fontSize: 16)),
             ),
             TextButton(
               onPressed: () {
-                setState(() => selectedCards.add(DrawnCard(card: card, isReversed: true, positionMeaning: positions[selectedCards.length])));
+                setState(() => selectedCards.add(DrawnCard(card: card, isReversed: true, positionMeaning: widget.spread.positions[selectedCards.length])));
                 Navigator.pop(context);
                 _checkFinish();
               },
-              child: const Text('逆位 (Reversed)', style: TextStyle(color: Colors.redAccent)),
+              child: const Text('逆位 (Reversed)', style: TextStyle(color: Colors.redAccent, fontSize: 16)),
             ),
           ],
         );
@@ -327,72 +596,171 @@ class _ManualDrawScreenState extends State<ManualDrawScreen> {
   }
 
   void _checkFinish() {
-    if (selectedCards.length == 3) {
-      Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: selectedCards)));
+    // 延迟 0.6 秒跳转，让用户能看一眼摆好的完整法阵
+    if (selectedCards.length == widget.spread.positions.length) {
+      Future.delayed(const Duration(milliseconds: 600), () {
+        Navigator.pushReplacement(context, MaterialPageRoute(builder: (_) => ReadingScreen(cards: selectedCards, topic: widget.topic, spreadName: widget.spread.name)));
+      });
     }
   }
 
   @override
   Widget build(BuildContext context) {
+    int maxCards = widget.spread.positions.length;
+    
+    // 生成顶部法阵的卡牌/空位占位符
+    List<Widget> miniMapCards = List.generate(maxCards, (index) {
+      bool isCrossed = (widget.spread.name.contains('凯尔特') && index == 1);
+      
+      if (index < selectedCards.length) {
+        // 已经选好的牌
+        final c = selectedCards[index];
+        Widget img = Transform.rotate(
+          angle: c.isReversed ? pi : 0,
+          child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[800])),
+        );
+        if (isCrossed) img = Transform.rotate(angle: pi / 2, child: img);
+
+        return SizedBox(
+          width: 95, height: 215,
+          child: Column(
+            children: [
+              Container(
+                height: 35, alignment: Alignment.center,
+                child: Text(c.positionMeaning, style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2),
+              ),
+              Expanded(
+                child: Container(
+                  decoration: BoxDecoration(border: Border.all(color: Colors.amber, width: 2), borderRadius: BorderRadius.circular(4)),
+                  child: ClipRRect(borderRadius: BorderRadius.circular(2), child: img),
+                ),
+              ),
+            ],
+          ),
+        );
+      } else {
+        // 还没选的空位（当前需要选的槽位会高亮）
+        bool isCurrent = index == selectedCards.length;
+        Widget placeholder = Container(
+          decoration: BoxDecoration(
+            color: isCurrent ? Colors.amber.withOpacity(0.15) : Colors.black38,
+            border: Border.all(color: isCurrent ? Colors.amber : Colors.white24, width: isCurrent ? 2 : 1),
+            borderRadius: BorderRadius.circular(6),
+          ),
+          child: Center(
+            child: Icon(Icons.add_circle_outline, color: isCurrent ? Colors.amber : Colors.white24, size: 30),
+          ),
+        );
+        if (isCrossed) placeholder = Transform.rotate(angle: pi / 2, child: placeholder);
+
+        return SizedBox(
+          width: 95, height: 215,
+          child: Column(
+            children: [
+              Container(
+                height: 35, alignment: Alignment.center,
+                child: Text(widget.spread.positions[index], style: TextStyle(color: isCurrent ? Colors.amber : Colors.white54, fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2),
+              ),
+              Expanded(child: placeholder),
+            ],
+          ),
+        );
+      }
+    });
+
     return Scaffold(
-      appBar: AppBar(title: Text('请选择你抽到的牌 (${selectedCards.length}/3)')),
-      body: GridView.builder(
-        padding: const EdgeInsets.all(10),
-        gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: 3, childAspectRatio: 0.6, crossAxisSpacing: 10, mainAxisSpacing: 10),
-        itemCount: tarotDeck.length,
-        itemBuilder: (context, index) {
-          final card = tarotDeck[index];
-          return GestureDetector(
-            onTap: () => _selectCard(card),
-            child: GridTile(
-              footer: GridTileBar(backgroundColor: Colors.black87, title: Text(card.name, style: const TextStyle(fontSize: 10))),
-              // 【关键修改】列表里也改为加载本地图
-              child: Image.asset('assets/images/${card.img}', fit: BoxFit.cover,
-                 errorBuilder: (c, e, s) => const Center(child: Icon(Icons.image_not_supported, color: Colors.white24)),
+      appBar: AppBar(title: Text('现实选牌录入 (${selectedCards.length}/$maxCards)')),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1E112A), Color(0xFF0F0C1B)]),
+        ),
+        child: Column(
+          children: [
+            // 🌟 核心升级：上半部分显示实时阵法组装过程！
+            Container(
+              height: widget.spread.name.contains('凯尔特') ? 380 : 250,
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              decoration: const BoxDecoration(
+                color: Colors.black26,
+                border: Border(bottom: BorderSide(color: Colors.white10)),
+              ),
+              child: SpreadVisualizer(spreadName: widget.spread.name, cards: miniMapCards),
+            ),
+            
+            // 提示文字
+            Padding(
+              padding: const EdgeInsets.all(12.0),
+              child: Text(
+                selectedCards.length < maxCards 
+                  ? '👉 请在下方选择【${widget.spread.positions[selectedCards.length]}】的牌'
+                  : '✨ 牌阵已就绪，正在开启解读...',
+                style: const TextStyle(color: Colors.amberAccent, fontSize: 16, fontWeight: FontWeight.bold),
               ),
             ),
-          );
-        },
+            
+            // 下半部分：牌库网格
+            Expanded(
+              child: GridView.builder(
+                padding: const EdgeInsets.all(12),
+                gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: 3, childAspectRatio: 0.6, crossAxisSpacing: 12, mainAxisSpacing: 12),
+                itemCount: tarotDeck.length,
+                itemBuilder: (context, index) {
+                  final card = tarotDeck[index];
+                  // 🌟 核心升级：防重复！如果已经选过这张牌了，就置灰不能再点
+                  bool isPicked = selectedCards.any((c) => c.card.name == card.name);
+                  
+                  return GestureDetector(
+                    onTap: isPicked ? null : () => _selectCard(card),
+                    child: Opacity(
+                      opacity: isPicked ? 0.3 : 1.0,
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(6),
+                        child: GridTile(
+                          footer: Container(
+                            color: Colors.black87,
+                            padding: const EdgeInsets.symmetric(vertical: 4),
+                            child: Text(card.name, textAlign: TextAlign.center, style: const TextStyle(fontSize: 10, color: Colors.white)),
+                          ),
+                          child: Stack(
+                            fit: StackFit.expand,
+                            children: [
+                              Image.asset('assets/images/${card.img}', fit: BoxFit.cover,
+                                 errorBuilder: (c, e, s) => Container(color: Colors.grey[850], child: const Center(child: Icon(Icons.image_not_supported, color: Colors.white24))),
+                              ),
+                              if (isPicked)
+                                Container(
+                                  color: Colors.black54,
+                                  child: const Center(child: Icon(Icons.check_circle, color: Colors.amber, size: 40)),
+                                )
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }
 }
 
-// ================= 4. 解牌结果页面 =================
-// 需要在文件最顶部（第1行）加入这两个库的引入：
-// import 'package:google_generative_ai/google_generative_ai.dart';
-// import 'package:flutter_markdown/flutter_markdown.dart';
-
-// ================= 4. 解牌结果页面 (接入免费大模型 AI) =================
+// ================= 4. 解牌结果页面 (顶部展示微缩法阵图) =================
 class ReadingScreen extends StatefulWidget {
   final List<DrawnCard> cards;
+  final String topic;
+  final String spreadName;
 
-  const ReadingScreen({Key? key, required this.cards}) : super(key: key);
+  const ReadingScreen({Key? key, required this.cards, required this.topic, required this.spreadName}) : super(key: key);
 
   @override
   _ReadingScreenState createState() => _ReadingScreenState();
 }
-
-// ================= 4. 解牌结果页面 (完美结合本地解析与 AI 综合解读) =================
-
-// ================= 4. 解牌结果页面 (通过 Vercel 代理安全调用 Gemini) =================
-// 
-// 改动说明：
-// 1. 移除了 google_generative_ai 包的使用
-// 2. 改用 http 包，通过你自己的 /api/gemini 代理发请求
-// 3. 不再需要 API Key 在 Flutter 代码里
-//
-// pubspec.yaml 需要加：
-//   http: ^1.2.0
-// 然后运行: flutter pub get
-//
-// 同时删掉 pubspec.yaml 里的：
-//   google_generative_ai: ...
-//   flutter_dotenv: ...
-//
-// main() 里的 dotenv 相关代码也可以删掉了
-
 
 class _ReadingScreenState extends State<ReadingScreen> {
   String aiResponse = "";
@@ -400,44 +768,45 @@ class _ReadingScreenState extends State<ReadingScreen> {
   bool showAI = false;
   bool isFinished = false;
 
-  // ✅ 你的 Vercel 代理 URL（不需要 https:// 前面漏掉了，加上）
   final String _proxyUrl = 'https://tai-taro.vercel.app/api/gemini';
 
   Future<void> _askAI() async {
     setState(() {
       showAI = true;
       isGenerating = true;
-      aiResponse = "🔮 灵界连结中，占卜师正在为你综合解读这三张牌的深层联系...\n\n";
+      aiResponse = "🔮 灵界连结中，占卜师正在为你综合解读...\n\n";
     });
 
-    String prompt = "你是一位神秘且专业的塔罗牌占卜师。用户抽到了以下三张牌：\n";
+    String prompt = "你是一位极度神秘、深谙心理学且充满同理心的资深塔罗牌大师。\n"
+        "用户向你求问关于【${widget.topic}】的发展，使用的是【${widget.spreadName}】。\n\n"
+        "抽牌情况如下：\n";
 
     for (var c in widget.cards) {
       String status = c.isReversed ? '逆位' : '正位';
-      prompt += "【${c.positionMeaning}】：${c.card.name}（$status）\n";
+      prompt += "- 在【${c.positionMeaning}】位置，抽到【${c.card.name}（$status）】\n";
     }
 
-    prompt += "\n请结合这三张牌的阵法含义，给出一份深度、神秘、且具有指引和治愈意义的综合解牌。重点分析这三张牌之间的联系。排版清晰。";
+    prompt += "\n请按照以下结构解答：\n"
+        "1. 🌟 能量感知：点破当前【${widget.topic}】的整体磁场。\n"
+        "2. 🃏 牌阵深度拆解：根据法阵的位置和牌面，深入分析它们相互的影响。\n"
+        "3. 💡 宇宙指引：给出具体的行动建议和治愈的寄语。\n"
+        "请使用优雅清晰的排版，语气洞悉人心。";
 
     try {
       final response = await http.post(
         Uri.parse(_proxyUrl),
         headers: {'Content-Type': 'application/json'},
-        body: jsonEncode({
-          "prompt": prompt,
-        }),
+        body: jsonEncode({"prompt": prompt}),
       );
 
       if (response.statusCode == 200) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
-
         setState(() {
           aiResponse = data['text'] ?? '占卜师暂时无法解读，请稍后再试。';
         });
       } else {
         setState(() {
-          aiResponse =
-              "⚠️ API 连接失败 (${response.statusCode})\n\n${response.body}";
+          aiResponse = "⚠️ API 连接失败 (${response.statusCode})\n\n${response.body}";
         });
       }
     } catch (e) {
@@ -454,111 +823,152 @@ class _ReadingScreenState extends State<ReadingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(title: const Text('你的塔罗指引')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
-        children: [
-          // ---------------- 第1部分：本地基础牌意 ----------------
-          ...widget.cards.map((c) {
-            final status = c.isReversed ? "逆位" : "正位";
-            final meaning = c.isReversed ? c.card.reversedMeaning : c.card.uprightMeaning;
+    List<Widget> miniMapCards = List.generate(widget.cards.length, (index) {
+      bool isCrossed = (widget.spreadName.contains('凯尔特') && index == 1);
+      final c = widget.cards[index];
+      
+      Widget img = Transform.rotate(
+        angle: c.isReversed ? pi : 0,
+        child: Image.asset('assets/images/${c.card.img}', fit: BoxFit.cover, errorBuilder: (ctx, err, stack) => Container(color: Colors.grey[800])),
+      );
+      if (isCrossed) img = Transform.rotate(angle: pi / 2, child: img);
 
-            return Card(
-              color: const Color(0xFF2C2C2C),
-              margin: const EdgeInsets.only(bottom: 20),
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Transform(
-                      transform: Matrix4.identity()..rotateZ(c.isReversed ? pi : 0),
-                      alignment: Alignment.center,
-                      child: Image.asset(
-                        'assets/images/${c.card.img}',
-                        width: 80,
-                        height: 140,
-                        fit: BoxFit.cover,
-                        errorBuilder: (ctx, err, stack) =>
-                            Container(width: 80, height: 140, color: Colors.grey),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            '【${c.positionMeaning}】 ${c.card.name}',
-                            style: const TextStyle(
-                                fontSize: 18,
-                                fontWeight: FontWeight.bold,
-                                color: Colors.amber),
-                          ),
-                          const SizedBox(height: 5),
-                          Text(
-                            '状态: $status',
-                            style: TextStyle(
-                                color: c.isReversed
-                                    ? Colors.redAccent
-                                    : Colors.greenAccent,
-                                fontWeight: FontWeight.bold),
-                          ),
-                          const Divider(color: Colors.white24),
-                          Text(
-                            meaning,
-                            style: const TextStyle(
-                                fontSize: 15, height: 1.4, color: Colors.white),
-                          ),
-                        ],
-                      ),
-                    )
-                  ],
-                ),
-              ),
-            );
-          }).toList(),
-
-          // ---------------- 第2部分：AI 综合解析框 ----------------
-          if (showAI)
+      return SizedBox(
+        width: 95, height: 215,
+        child: Column(
+          children: [
             Container(
-              margin: const EdgeInsets.only(top: 10, bottom: 20),
-              padding: const EdgeInsets.all(16),
-              decoration: BoxDecoration(
-                color: const Color(0xFF1E1E1E),
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.amber.withOpacity(0.5)),
-              ),
-              child: MarkdownBody(
-                data: aiResponse,
-                styleSheet: MarkdownStyleSheet(
-                  p: const TextStyle(
-                      fontSize: 16, height: 1.6, color: Colors.white),
-                ),
+              height: 35, alignment: Alignment.center,
+              child: Text(c.positionMeaning, style: const TextStyle(color: Colors.amber, fontSize: 12, fontWeight: FontWeight.bold), textAlign: TextAlign.center, maxLines: 2),
+            ),
+            Expanded(
+              child: Container(
+                decoration: BoxDecoration(border: Border.all(color: Colors.amber, width: 2), borderRadius: BorderRadius.circular(4)),
+                child: ClipRRect(borderRadius: BorderRadius.circular(2), child: img),
               ),
             ),
+          ],
+        ),
+      );
+    });
 
-          const SizedBox(height: 80),
-        ],
+    return Scaffold(
+      appBar: AppBar(title: Text('【${widget.topic}】指引报告', style: const TextStyle(color: Colors.amber))),
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(begin: Alignment.topCenter, end: Alignment.bottomCenter, colors: [Color(0xFF1E112A), Color(0xFF0F0C1B)]),
+        ),
+        child: ListView(
+          padding: const EdgeInsets.all(16),
+          children: [
+            Container(
+              height: widget.spreadName.contains('凯尔特') ? 380 : 250,
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              margin: const EdgeInsets.only(bottom: 20),
+              decoration: BoxDecoration(
+                color: Colors.black26,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: Colors.white10),
+              ),
+              child: SpreadVisualizer(spreadName: widget.spreadName, cards: miniMapCards),
+            ),
+
+            ...widget.cards.map((c) {
+              final status = c.isReversed ? "逆位" : "正位";
+              final meaning = c.isReversed ? c.card.reversedMeaning : c.card.uprightMeaning;
+
+              return Container(
+                margin: const EdgeInsets.only(bottom: 20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF2C2C3E).withOpacity(0.6),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.white10),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.all(16.0),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Transform(
+                        transform: Matrix4.identity()..rotateZ(c.isReversed ? pi : 0),
+                        alignment: Alignment.center,
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(6),
+                          child: Image.asset(
+                            'assets/images/${c.card.img}',
+                            width: 80, height: 140, fit: BoxFit.cover,
+                            errorBuilder: (ctx, err, stack) => Container(width: 80, height: 140, color: Colors.grey[800]),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              '【${c.positionMeaning}】\n${c.card.name}',
+                              style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.amber, height: 1.3),
+                            ),
+                            const SizedBox(height: 5),
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                              decoration: BoxDecoration(
+                                color: c.isReversed ? Colors.redAccent.withOpacity(0.2) : Colors.greenAccent.withOpacity(0.2),
+                                borderRadius: BorderRadius.circular(4)
+                              ),
+                              child: Text(
+                                status,
+                                style: TextStyle(color: c.isReversed ? Colors.redAccent : Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
+                              ),
+                            ),
+                            const Divider(color: Colors.white24, height: 20),
+                            Text(meaning, style: const TextStyle(fontSize: 14, height: 1.5, color: Colors.white70)),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                ),
+              );
+            }).toList(),
+
+            if (showAI)
+              Container(
+                margin: const EdgeInsets.only(top: 10, bottom: 20),
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF1E112A),
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: Colors.amber.withOpacity(0.6), width: 1.5),
+                  boxShadow: [BoxShadow(color: Colors.amber.withOpacity(0.1), blurRadius: 15, spreadRadius: 2)],
+                ),
+                child: MarkdownBody(
+                  data: aiResponse,
+                  styleSheet: MarkdownStyleSheet(
+                    p: const TextStyle(fontSize: 16, height: 1.8, color: Colors.white, letterSpacing: 0.5),
+                    h1: const TextStyle(color: Colors.amber, fontSize: 22, fontWeight: FontWeight.bold),
+                    h2: const TextStyle(color: Colors.amber, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
+                ),
+              ),
+
+            const SizedBox(height: 90),
+          ],
+        ),
       ),
 
-      // ---------------- 第3部分：AI 按钮 ----------------
       floatingActionButton: isFinished
           ? null
           : FloatingActionButton.extended(
               backgroundColor: Colors.amber,
+              elevation: 8,
               icon: isGenerating
-                  ? const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(
-                          color: Colors.black, strokeWidth: 2))
+                  ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.black, strokeWidth: 2))
                   : const Icon(Icons.auto_awesome, color: Colors.black),
               label: Text(
-                isGenerating ? '大师正在观星...' : '✨ 请 AI 综合深度解牌',
-                style: const TextStyle(
-                    color: Colors.black, fontWeight: FontWeight.bold),
+                isGenerating ? '大师观星解读中...' : '✨ 开启 AI 深度解牌',
+                style: const TextStyle(color: Colors.black, fontWeight: FontWeight.bold, fontSize: 16),
               ),
               onPressed: isGenerating ? null : _askAI,
             ),
@@ -567,10 +977,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
   }
 }
 
-
-// ================= 你提供的 78 张牌原始 JSON 数据 =================
-// ================= 你提供的 78 张牌数据 (完美中英双语版) =================
-// ================= 你提供的 78 张牌数据 (终极解析版) =================
+// ⬇️ 下方的原始牌意数据保留不变
 const List<Map<String, dynamic>> rawTarotData = [
   {"name": "愚者 (The Fool)", "number": "0", "arcana": "大阿尔卡纳", "suit": null, "img": "m00.jpg",
    "upright": "全新的开始、充满未知的冒险、绝对的自由与天真。放空心思，勇敢踏上未知的旅程，相信宇宙的安排。", 
@@ -639,7 +1046,7 @@ const List<Map<String, dynamic>> rawTarotData = [
    "upright": "完成、圆满、成功的终点。一个重要的生命周期完美结束，你拥有了一切，即将迈入更高的层次。", 
    "reversed": "未完成、停滞、准备不足。距离成功只有一步之遥，但可能因为某些未解决的问题而暂时受阻。"},
 
-  // 以下为小阿尔卡纳 (极其精简精准的解牌)
+  // 以下为小阿尔卡纳
   {"name": "圣杯王牌 (Ace of Cups)", "number": "1", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c01.jpg",
    "upright": "感情的崭新开始、爱意涌动、新恋情或新友谊的诞生。", "reversed": "情感枯竭、直觉受阻、感情可能遭遇单相思或冷漠。"},
   {"name": "圣杯二 (Two of Cups)", "number": "2", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c02.jpg",
