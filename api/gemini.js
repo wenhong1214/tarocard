@@ -35,7 +35,7 @@ module.exports = async function handler(req, res) {
 
     // 🌟 核心改动：向 OpenRouter API 发送请求并配置最新模型队列
     const openRouterRes = await fetch(
-      "https://openrouter.ai",
+      "https://openrouter.ai/api/v1/chat/completions",
       {
         method: "POST",
         headers: {
