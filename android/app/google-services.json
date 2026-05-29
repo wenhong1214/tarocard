@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "366428734957",
+    "project_id": "tai-taro-card",
+    "storage_bucket": "tai-taro-card.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:366428734957:android:4034ea47daf66fe57fd3e4",
+        "android_client_info": {
+          "package_name": "com.example.taro_card"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAhssklvIVh9ReHsTmkitTBYk8Q9omkzFU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

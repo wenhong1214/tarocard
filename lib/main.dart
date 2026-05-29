@@ -6,24 +6,22 @@ import 'package:http/http.dart' as http;
 import 'package:url_launcher/url_launcher.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_remote_config/firebase_remote_config.dart';
-
+import 'firebase_options.dart'; // 👈 记得确认有导入这个文件
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
   
-  // 加入 try-catch 保护，即使 Firebase 初始化失败，也能正常进 App
   try {
     await Firebase.initializeApp(
-      // options: DefaultFirebaseOptions.currentPlatform, // 👈 暂时先注释掉，等下配置好了再打开
+      options: DefaultFirebaseOptions.currentPlatform, // 👈 必须取消注释！
     );
     debugPrint("🔥 Firebase 初始化成功！");
   } catch (e) {
-    debugPrint("❌ Firebase 初始化失败 (这是正常的，如果你还没配置密钥文件): $e");
+    debugPrint("❌ Firebase 初始化失败: $e");
   }
   
   runApp(const TarotApp());
 }
-
 class TarotApp extends StatelessWidget {
   const TarotApp({Key? key}) : super(key: key);
 
@@ -905,7 +903,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
         Uri.parse(_proxyUrl),
         headers: {
           'Content-Type': 'application/json',
-          'x-app-version': '2.0.0', // 👈 核心：发请求带上鉴权版本头
+          'x-app-version': '2.0.1', // 👈 已经帮你改成了 2.0.1！
         },
         body: jsonEncode({"prompt": prompt}),
       );
@@ -916,13 +914,26 @@ class _ReadingScreenState extends State<ReadingScreen> {
           aiResponse = data['text'] ?? '占卜师暂时无法解读，请稍后再试。';
         });
       } else if (response.statusCode == 403) {
-        // 兼容处理：遇到版本限制直接抛出 Vercel 后端的提示
+        // 遇到版本限制直接抛出 Vercel 后端的提示
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
           aiResponse = "⚠️ ${data['error'] ?? '请更新 App 才能继续使用'}";
         });
+
+        // 👇 终极双保险：只要遇到 403 拦截，立刻去 Firebase 拿链接强制弹窗！
+        try {
+          final remoteConfig = FirebaseRemoteConfig.instance;
+          await remoteConfig.fetchAndActivate(); // 强制拉取最新配置
+          String downloadUrl = remoteConfig.getString('apk_download_url');
+          
+          if (downloadUrl.isNotEmpty) {
+            _showForceUpdateDialog(downloadUrl);
+          }
+        } catch (e) {
+          debugPrint("获取下载链接失败: $e");
+        }
+        
       } else if (response.statusCode == 429) {
-        // 处理访问过于频繁 (Rate Limiting)
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
           aiResponse = "⚠️ ${data['error'] ?? '访问过于频繁，请稍后再试。'}";
@@ -945,6 +956,56 @@ class _ReadingScreenState extends State<ReadingScreen> {
     }
   }
 
+  // 👇 专门在解牌页弹出的强制更新框
+  void _showForceUpdateDialog(String url) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // 禁止点击弹窗外部关闭
+      builder: (context) {
+        return PopScope(
+          canPop: false, // 禁用物理返回键
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF1E112A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Colors.amber, width: 1.5),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.system_update_alt, color: Colors.amber),
+                SizedBox(width: 10),
+                Text('灵境已升级', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: const Text(
+              '当前版本已无法连接星轨，请点击下方按钮前往下载最新版本，探索全新天机。',
+              style: TextStyle(color: Colors.white70, fontSize: 16, height: 1.5),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                ),
+                onPressed: () async {
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: const Text('✨ 前往下载更新', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  // ... 下方的 build 方法（界面渲染部分）保持你原本的代码不变即可
   @override
   Widget build(BuildContext context) {
     List<Widget> miniMapCards = List.generate(widget.cards.length, (index) {
