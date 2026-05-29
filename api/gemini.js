@@ -8,6 +8,11 @@ module.exports = async function handler(req, res) {
     return res.status(200).end();
   }
 
+  // 🔒 拒绝旧 APK（没有版本 header 的请求全部拒绝）
+  if (!req.headers['x-app-version']) {
+    return res.status(403).json({ error: "请更新 App 才能继续使用" });
+  }
+
   if (req.method !== "POST") {
     return res.status(405).json({ error: "Only POST allowed" });
   }
