@@ -3,9 +3,24 @@ import 'package:flutter/material.dart';
 import 'package:flutter_markdown/flutter_markdown.dart';
 import 'dart:convert';
 import 'package:http/http.dart' as http;
+import 'package:url_launcher/url_launcher.dart';
+import 'package:firebase_core/firebase_core.dart';
+import 'package:firebase_remote_config/firebase_remote_config.dart';
+
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  
+  // 加入 try-catch 保护，即使 Firebase 初始化失败，也能正常进 App
+  try {
+    await Firebase.initializeApp(
+      // options: DefaultFirebaseOptions.currentPlatform, // 👈 暂时先注释掉，等下配置好了再打开
+    );
+    debugPrint("🔥 Firebase 初始化成功！");
+  } catch (e) {
+    debugPrint("❌ Firebase 初始化失败 (这是正常的，如果你还没配置密钥文件): $e");
+  }
+  
   runApp(const TarotApp());
 }
 
@@ -117,6 +132,99 @@ class HomeScreen extends StatefulWidget {
 class _HomeScreenState extends State<HomeScreen> {
   String selectedTopic = availableTopics[0];
   SpreadConfig selectedSpread = availableSpreads[0];
+
+  final String currentAppVersion = '2.0.0';
+
+  @override
+  void initState() {
+    super.initState();
+    _checkVersion(); // 启动时自动检查版本
+  }
+
+  // 👇 使用 Firebase Remote Config 检查版本
+  Future<void> _checkVersion() async {
+    try {
+      final remoteConfig = FirebaseRemoteConfig.instance;
+      
+      // 配置抓取策略（开发时设为0可以立刻看到效果，发布线上建议设为 1 或 12 小时）
+      await remoteConfig.setConfigSettings(RemoteConfigSettings(
+        fetchTimeout: const Duration(minutes: 1),
+        minimumFetchInterval: const Duration(seconds: 0), // 开发测试时设为0，上线可改为 Duration(hours: 1)
+      ));
+
+      // 设置默认值（防止断网时读不到数据崩溃）
+      await remoteConfig.setDefaults(const {
+        "latest_app_version": "1.0.0",
+        "apk_download_url": "",
+      });
+
+      // 从 Firebase 云端拉取最新配置并激活
+      await remoteConfig.fetchAndActivate();
+
+      // 获取你在 Firebase Console 里填写的参数
+      String latestVersion = remoteConfig.getString('latest_app_version');
+      String downloadUrl = remoteConfig.getString('apk_download_url');
+
+      debugPrint("当前版本: $currentAppVersion, 云端最新版本: $latestVersion");
+
+      // 如果云端最新版本和当前版本不同，则弹出强制更新框
+      if (latestVersion.isNotEmpty && latestVersion != currentAppVersion) {
+        _showForceUpdateDialog(downloadUrl);
+      }
+    } catch (e) {
+      debugPrint("Firebase 版本检查失败: $e");
+    }
+  }
+
+  void _showForceUpdateDialog(String url) {
+    showDialog(
+      context: context,
+      barrierDismissible: false, // 禁止点击弹窗外部关闭
+      builder: (context) {
+        return PopScope(
+          canPop: false, // 禁用安卓物理返回键关闭
+          child: AlertDialog(
+            backgroundColor: const Color(0xFF1E112A),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(16),
+              side: const BorderSide(color: Colors.amber, width: 1.5),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.system_update_alt, color: Colors.amber),
+                SizedBox(width: 10),
+                Text('结界升级提示', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
+              ],
+            ),
+            content: const Text(
+              '为了保证占卜灵境的稳定与准确，请务必更新至最新版本以继续探索天机。',
+              style: TextStyle(color: Colors.white70, fontSize: 16, height: 1.5),
+            ),
+            actionsAlignment: MainAxisAlignment.center,
+            actions: [
+              ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: Colors.amber,
+                  foregroundColor: Colors.black,
+                  padding: const EdgeInsets.symmetric(horizontal: 30, vertical: 14),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(30)),
+                ),
+                onPressed: () async {
+                  final uri = Uri.parse(url);
+                  if (await canLaunchUrl(uri)) {
+                    await launchUrl(uri, mode: LaunchMode.externalApplication);
+                  }
+                },
+                child: const Text('✨ 前往下载更新', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+  
+  // ... build 方法保持不变
 
   @override
   Widget build(BuildContext context) {
@@ -795,7 +903,10 @@ class _ReadingScreenState extends State<ReadingScreen> {
     try {
       final response = await http.post(
         Uri.parse(_proxyUrl),
-        headers: {'Content-Type': 'application/json'},
+        headers: {
+          'Content-Type': 'application/json',
+          'x-app-version': '2.0.0', // 👈 核心：发请求带上鉴权版本头
+        },
         body: jsonEncode({"prompt": prompt}),
       );
 
@@ -804,11 +915,24 @@ class _ReadingScreenState extends State<ReadingScreen> {
         setState(() {
           aiResponse = data['text'] ?? '占卜师暂时无法解读，请稍后再试。';
         });
+      } else if (response.statusCode == 403) {
+        // 兼容处理：遇到版本限制直接抛出 Vercel 后端的提示
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() {
+          aiResponse = "⚠️ ${data['error'] ?? '请更新 App 才能继续使用'}";
+        });
+      } else if (response.statusCode == 429) {
+        // 处理访问过于频繁 (Rate Limiting)
+        final data = jsonDecode(utf8.decode(response.bodyBytes));
+        setState(() {
+          aiResponse = "⚠️ ${data['error'] ?? '访问过于频繁，请稍后再试。'}";
+        });
       } else {
         setState(() {
           aiResponse = "⚠️ API 连接失败 (${response.statusCode})\n\n${response.body}";
         });
       }
+
     } catch (e) {
       setState(() {
         aiResponse = "⚠️ 占卜师暂时失去了连接，请检查网络。($e)";
@@ -1046,7 +1170,6 @@ const List<Map<String, dynamic>> rawTarotData = [
    "upright": "完成、圆满、成功的终点。一个重要的生命周期完美结束，你拥有了一切，即将迈入更高的层次。", 
    "reversed": "未完成、停滞、准备不足。距离成功只有一步之遥，但可能因为某些未解决的问题而暂时受阻。"},
 
-  // 以下为小阿尔卡纳
   {"name": "圣杯王牌 (Ace of Cups)", "number": "1", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c01.jpg",
    "upright": "感情的崭新开始、爱意涌动、新恋情或新友谊的诞生。", "reversed": "情感枯竭、直觉受阻、感情可能遭遇单相思或冷漠。"},
   {"name": "圣杯二 (Two of Cups)", "number": "2", "arcana": "小阿尔卡纳", "suit": "圣杯", "img": "c02.jpg",
