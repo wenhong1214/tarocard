@@ -64,7 +64,7 @@ final List<SpreadConfig> availableSpreads = [
     positions: ['过去的影响', '现在的状况', '未来的发展'],
   ),
   SpreadConfig(
-    name: '大十字展开法 (5张)',
+    name: '大十字-展开法 (5张)',
     description: '呈完美的十字形状，剖析特定事件的核心、阻力、助力及深层原因。',
     positions: ['核心现状', '过去影响 / 阻力', '未来发展 / 助力', '显意识 / 理想目标', '潜意识 / 现实基础'],
   ),
@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedTopic = availableTopics[0];
   SpreadConfig selectedSpread = availableSpreads[0];
 
-  final String currentAppVersion = '2.0.4';
+  final String currentAppVersion = '2.0.5';
 
   @override
   void initState() {
@@ -903,7 +903,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
         Uri.parse(_proxyUrl),
         headers: {
           'Content-Type': 'application/json',
-          'x-app-version': '2.0.4', // 👈 已经帮你改成了 2.0.1！
+          'x-app-version': '2.0.5', // 👈 已经帮你改成了 2.0.1！
         },
         body: jsonEncode({"prompt": prompt}),
       );
@@ -914,33 +914,32 @@ class _ReadingScreenState extends State<ReadingScreen> {
           aiResponse = data['text'] ?? '占卜师暂时无法解读，请稍后再试。';
         });
       } else if (response.statusCode == 403) {
-        // 兼容处理：遇到版本限制直接抛出 Vercel 后端的提示
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
           aiResponse = "⚠️ ${data['error'] ?? '请更新 App 才能继续使用'}";
         });
 
-        // 👇 终极防漏网之鱼（带保底强制弹窗机制）
+        // 👇 加上防卡死机制：最多等 Firebase 3秒钟！
         try {
+          String downloadUrl = "";
           final remoteConfig = FirebaseRemoteConfig.instance;
-          await remoteConfig.fetchAndActivate(); // 强制拉取最新配置
-          String downloadUrl = remoteConfig.getString('apk_download_url');
           
-          // ⚠️ 如果你在 Firebase 填错了参数名、没点发布、或者网络卡顿，就会拿到空值
+          // 给 Firebase 加 3 秒限时，超过 3 秒没反应直接抛出异常，走 catch 路线！
+          await remoteConfig.fetchAndActivate().timeout(const Duration(seconds: 3)); 
+          downloadUrl = remoteConfig.getString('apk_download_url');
+          
           if (downloadUrl.isEmpty) {
-            // 保底链接：把你 GitHub Release 的链接填在这里！
-            downloadUrl = "https://github.com/wenhong1214/tarocard/releases"; // 👈 替换成你真实的 GitHub 下载页链接
-            debugPrint("🚨 警告：Firebase 未返回 apk_download_url，启用保底链接！");
+            downloadUrl = "https://github.com/wenhong1214/tarocard/releases"; 
           }
+          if (mounted) _showForceUpdateDialog(downloadUrl);
           
-          // 确保界面还在的情况下强制弹窗
-          if (mounted) {
-            _showForceUpdateDialog(downloadUrl);
-          }
         } catch (e) {
-          debugPrint("获取下载链接失败: $e");
+          debugPrint("🚨 Firebase 请求卡死或超时，启用保底弹窗: $e");
+          // 哪怕 Firebase 彻底坏了，3秒后也一定会强制弹窗！
+          if (mounted) {
+            _showForceUpdateDialog("https://github.com/wenhong1214/tarocard/releases");
+          }
         }
-        
       }
         
        else if (response.statusCode == 429) {
