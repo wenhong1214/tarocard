@@ -64,7 +64,7 @@ final List<SpreadConfig> availableSpreads = [
     positions: ['过去的影响', '现在的状况', '未来的发展'],
   ),
   SpreadConfig(
-    name: '大十字-展开法 (5张)',
+    name: '大十字展开法 (5张)',
     description: '呈完美的十字形状，剖析特定事件的核心、阻力、助力及深层原因。',
     positions: ['核心现状', '过去影响 / 阻力', '未来发展 / 助力', '显意识 / 理想目标', '潜意识 / 现实基础'],
   ),
@@ -74,7 +74,7 @@ final List<SpreadConfig> availableSpreads = [
     positions: ['面临的核心问题', '选择 A 的发展现状', '选择 B 的发展现状', '选择 A 的最终结果', '选择 B 的最终结果'],
   ),
   SpreadConfig(
-    name: '凯尔特十字 (10张)',
+    name: '凯尔特-十字 (10张)',
     description: '最经典的塔罗牌阵，包含中央十字与右侧立柱。全方位深度剖析复杂问题。',
     positions: [
       '当前现状', '面临的障碍(横放)', '潜意识 / 现实基础', '过去的影响',
@@ -131,7 +131,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedTopic = availableTopics[0];
   SpreadConfig selectedSpread = availableSpreads[0];
 
-  final String currentAppVersion = '2.0.2';
+  final String currentAppVersion = '2.0.3';
 
   @override
   void initState() {
@@ -903,7 +903,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
         Uri.parse(_proxyUrl),
         headers: {
           'Content-Type': 'application/json',
-          'x-app-version': '2.0.2', // 👈 已经帮你改成了 2.0.1！
+          'x-app-version': '2.0.3', // 👈 已经帮你改成了 2.0.1！
         },
         body: jsonEncode({"prompt": prompt}),
       );
@@ -914,26 +914,36 @@ class _ReadingScreenState extends State<ReadingScreen> {
           aiResponse = data['text'] ?? '占卜师暂时无法解读，请稍后再试。';
         });
       } else if (response.statusCode == 403) {
-        // 遇到版本限制直接抛出 Vercel 后端的提示
+        // 兼容处理：遇到版本限制直接抛出 Vercel 后端的提示
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
           aiResponse = "⚠️ ${data['error'] ?? '请更新 App 才能继续使用'}";
         });
 
-        // 👇 终极双保险：只要遇到 403 拦截，立刻去 Firebase 拿链接强制弹窗！
+        // 👇 终极防漏网之鱼（带保底强制弹窗机制）
         try {
           final remoteConfig = FirebaseRemoteConfig.instance;
           await remoteConfig.fetchAndActivate(); // 强制拉取最新配置
           String downloadUrl = remoteConfig.getString('apk_download_url');
           
-          if (downloadUrl.isNotEmpty) {
+          // ⚠️ 如果你在 Firebase 填错了参数名、没点发布、或者网络卡顿，就会拿到空值
+          if (downloadUrl.isEmpty) {
+            // 保底链接：把你 GitHub Release 的链接填在这里！
+            downloadUrl = "https://github.com/wenhong1214/tarocard/releases"; // 👈 替换成你真实的 GitHub 下载页链接
+            debugPrint("🚨 警告：Firebase 未返回 apk_download_url，启用保底链接！");
+          }
+          
+          // 确保界面还在的情况下强制弹窗
+          if (mounted) {
             _showForceUpdateDialog(downloadUrl);
           }
         } catch (e) {
           debugPrint("获取下载链接失败: $e");
         }
         
-      } else if (response.statusCode == 429) {
+      }
+        
+       else if (response.statusCode == 429) {
         final data = jsonDecode(utf8.decode(response.bodyBytes));
         setState(() {
           aiResponse = "⚠️ ${data['error'] ?? '访问过于频繁，请稍后再试。'}";
