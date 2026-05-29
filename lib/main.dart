@@ -30,7 +30,7 @@ class TarotApp extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      title: '塔罗灵境 Tarot',
+      title: '塔罗-灵境 Tarot',
       theme: ThemeData(
         brightness: Brightness.dark,
         primaryColor: const Color(0xFF673AB7),
