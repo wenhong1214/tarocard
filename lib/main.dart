@@ -133,7 +133,7 @@ class _HomeScreenState extends State<HomeScreen> {
   String selectedTopic = availableTopics[0];
   SpreadConfig selectedSpread = availableSpreads[0];
 
-  final String currentAppVersion = '2.0.0';
+  final String currentAppVersion = '2.0.1';
 
   @override
   void initState() {
@@ -905,7 +905,7 @@ class _ReadingScreenState extends State<ReadingScreen> {
         Uri.parse(_proxyUrl),
         headers: {
           'Content-Type': 'application/json',
-          'x-app-version': '2.0.0', // 👈 核心：发请求带上鉴权版本头
+          'x-app-version': '2.0.1', // 👈 核心：发请求带上鉴权版本头
         },
         body: jsonEncode({"prompt": prompt}),
       );
